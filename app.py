@@ -8,7 +8,7 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-FONT_PATH = "fonts/Roboto-Regular.ttf"  # bạn nhớ upload đúng file vào
+FONT_PATH = "fonts/Roboto-Regular.ttf"
 
 
 @app.route('/invoice', methods=['POST'])
@@ -43,39 +43,32 @@ def render_invoice():
 
 
 def image_to_escpos(image: Image.Image) -> bytes:
-    """
-    Convert 1-bit PIL Image to ESC/POS printable bytes
-    """
-    image = image.convert("1")  # Ensure 1-bit B/W
+    image = image.convert("1")  # Ensure 1-bit mode
     width, height = image.size
-    bytes_per_line = (height + 7) // 8
     data = bytearray()
 
-    for y_offset in range(0, height, 24):  # 24 dots per stripe
-        stripe_height = min(24, height - y_offset)
-        data += b'\x1B*\x21'  # ESC * 33 (24-dot double density)
+    for y in range(0, height, 24):
+        # ESC * m nL nH : m=33 (24-dot double density)
+        data += b'\x1B*\x21'
         nL = width & 0xFF
         nH = (width >> 8) & 0xFF
         data += bytes([nL, nH])
 
         for x in range(width):
-            for k in range(0, 24):
+            for k in range(3):  # 3 bytes per column (24 pixels)
                 byte = 0x00
-                y = y_offset + k
-                if y >= height:
-                    continue
-                pixel = image.getpixel((x, y))
-                if pixel == 0:
-                    byte |= (1 << (7 - (k % 8)))
-                if k % 8 == 7:
-                    data.append(byte)
-                    byte = 0x00
-            if 24 % 8 != 0:
+                for b in range(8):
+                    yy = y + k * 8 + b
+                    if yy >= height:
+                        continue
+                    pixel = image.getpixel((x, yy))
+                    if pixel == 0:  # black pixel
+                        byte |= (1 << (7 - b))
                 data.append(byte)
 
-        data += b'\x0A'  # line feed
+        data += b'\x0A'  # line feed after each band
 
-    data += b'\x0A\x0A\x1D\x56\x00'  # feed + cut
+    data += b'\x0A\x0A\x1D\x56\x00'  # feed and full cut
     return bytes(data)
 
 
