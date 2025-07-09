@@ -27,7 +27,9 @@ def render_invoice():
 
     y = 10
     for line in lines:
-        w, h = draw.textsize(line, font=font)
+        bbox = draw.textbbox((0, 0), line, font=font)
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
         draw.text(((width - w) / 2, y), line, font=font, fill=0)
         y += h + 5
 
