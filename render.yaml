@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: text-to-image
+    env: python
+    plan: free
+    buildCommand: ""
+    startCommand: python app.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
