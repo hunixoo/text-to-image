@@ -45,32 +45,41 @@ def render_invoice():
     return Response(escpos_data, mimetype='application/octet-stream')
 
 
-def image_to_escpos(image: Image.Image) -> bytes:
-    image = image.convert("1")
-    width, height = image.size
-    data = bytearray()
+def image_to_escpos(img: Image.Image) -> bytes:
+    img = img.convert('1')
+    width, height = img.size
 
-    for y in range(0, height, 24):
-        data += b'\x1B*\x21'  # ESC * m=33 (24-dot double density)
+    # Đảm bảo width chia hết cho 8
+    if width % 8 != 0:
+        width += 8 - (width % 8)
+        new_img = Image.new("1", (width, height), color=1)
+        new_img.paste(img, (0, 0))
+        img = new_img
+
+    bytes_data = bytearray()
+
+    for y in range(0, height, 24):  # mỗi lần in 24 dòng
+        bytes_data += b'\x1B*\x21'  # 0x1B 0x2A 0x21 là in mode 33 (24-dot double density)
         nL = width & 0xFF
         nH = (width >> 8) & 0xFF
-        data += bytes([nL, nH])
+        bytes_data += bytes([nL, nH])
 
         for x in range(width):
-            for k in range(3):  # 3 bytes cho 24 dòng
-                byte = 0x00
+            for k in range(3):  # 3 bytes = 24 dots
+                byte = 0
                 for b in range(8):
                     y_offset = y + k * 8 + b
-                    if y_offset < height:
-                        pixel = image.getpixel((x, y_offset))
-                        if pixel == 0:
-                            byte |= (1 << (7 - b))
-                data.append(byte)
+                    if y_offset >= height:
+                        continue
+                    pixel = img.getpixel((x, y_offset))
+                    if pixel == 0:
+                        byte |= (1 << (7 - b))
+                bytes_data.append(byte)
 
-        data += b'\n'
+        bytes_data += b'\x0A'  # xuống dòng
 
-    data += b'\n\n\x1D\x56\x00'  # feed + cut
-    return bytes(data)
+    bytes_data += b'\x0A\x0A\x1D\x56\x00'  # feed + cut
+    return bytes(bytes_data)
 
 
 if __name__ == '__main__':
