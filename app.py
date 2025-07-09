@@ -21,7 +21,7 @@ def render_invoice():
     font = ImageFont.truetype(FONT_PATH, font_size)
 
     width = 384  # in pixel, 58mm giấy
-    height = 100 + len(lines) * (font_size + 10) + (150 if qr_data else 0)
+    height = 100 + len(lines) * (font_size + 10) + (160 if qr_data else 0)
     img = Image.new("1", (width, height), color=1)
     draw = ImageDraw.Draw(img)
 
@@ -45,33 +45,33 @@ def render_invoice():
 
 
 def image_to_escpos(image: Image.Image) -> bytes:
-    image = image.convert("1")  # Ensure 1-bit mode
+    image = image.convert("1")  # đảm bảo ảnh trắng đen 1-bit
     width, height = image.size
     data = bytearray()
 
+    # In theo từng khối 24 pixel chiều cao
     for y in range(0, height, 24):
-        # ESC * m nL nH : m=33 (24-dot double density)
-        data += b'\x1B*\x21'
+        data += b'\x1B*\x21'  # ESC * m=33 (24-dot double density)
         nL = width & 0xFF
         nH = (width >> 8) & 0xFF
         data += bytes([nL, nH])
 
         for x in range(width):
-            for k in range(3):  # 3 bytes per column (24 pixels)
+            for k in range(3):  # 3 byte cho 24 dots
                 byte = 0x00
                 for b in range(8):
-                    yy = y + k * 8 + b
-                    if yy >= height:
-                        continue
-                    pixel = image.getpixel((x, yy))
-                    if pixel == 0:  # black pixel
-                        byte |= (1 << (7 - b))
+                    y_offset = y + k * 8 + b
+                    if y_offset < height:
+                        pixel = image.getpixel((x, y_offset))
+                        if pixel == 0:
+                            byte |= (1 << (7 - b))
                 data.append(byte)
 
-        data += b'\x0A'  # line feed after each band
+        data += b'\n'  # Xuống dòng
 
-    data += b'\x0A\x0A\x1D\x56\x00'  # feed and full cut
+    data += b'\n\n\x1D\x56\x00'  # Feed và cắt giấy
     return bytes(data)
+
 
 
 if __name__ == '__main__':
