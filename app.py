@@ -1,97 +1,30 @@
-from flask import Flask, request, send_file, Response
+# server.py
+
+from flask import Flask, request, Response
 from flask_cors import CORS
 from PIL import Image, ImageDraw, ImageFont
 import qrcode
-import io
 import os
 
 app = Flask(__name__)
-CORS(app)
+# Cho phép client truy cập các header tùy chỉnh
+CORS(app, expose_headers=['X-Image-Width', 'X-Image-Height'])
 
-FONT_PATH = "fonts/Roboto-Regular.ttf"
-
-
-@app.route('/invoice', methods=['POST'])
-def render_invoice():
-    data = request.json
-    lines = data.get('lines', ['Hóa đơn mẫu'])
-    font_size = data.get('font_size', 28)
-    qr_data = data.get('qr_data', None)
-
-    # Load font
-    font = ImageFont.truetype(FONT_PATH, font_size)
-
-    width = 384  # in pixel, 58mm giấy
-    height = 100 + len(lines) * (font_size + 10) + (160 if qr_data else 0)
-    img = Image.new("1", (width, height), color=1)  # 1-bit image
-    draw = ImageDraw.Draw(img)
-
-    y = 10
-    for line in lines:
-        bbox = draw.textbbox((0, 0), line, font=font)
-        w = bbox[2] - bbox[0]
-        h = bbox[3] - bbox[1]
-        draw.text(((width - w) / 2, y), line, font=font, fill=0)
-        y += h + 5
-
-    if qr_data:
-        qr = qrcode.make(qr_data).resize((120, 120)).convert("1")
-        img.paste(qr, ((width - 120) // 2, y))
-        y += 130
-
-    img = img.crop((0, 0, width, y + 10))
-
-    escpos_data = image_to_raster_escpos(img)
-    return Response(escpos_data, mimetype='application/octet-stream')
+# Giả sử font nằm trong thư mục con 'fonts'
+FONT_PATH = os.path.join(os.path.dirname(__file__), "fonts", "Roboto-Regular.ttf")
 
 
-def image_to_escpos(img: Image.Image) -> bytes:
-    img = img.convert('1')
-    width, height = img.size
-
-    # Đảm bảo width chia hết cho 8
-    if width % 8 != 0:
-        width += 8 - (width % 8)
-        new_img = Image.new("1", (width, height), color=1)
-        new_img.paste(img, (0, 0))
-        img = new_img
-
-    bytes_data = bytearray()
-
-    for y in range(0, height, 24):  # mỗi lần in 24 dòng
-        bytes_data += b'\x1B*\x21'  # 0x1B 0x2A 0x21 là in mode 33 (24-dot double density)
-        nL = width & 0xFF
-        nH = (width >> 8) & 0xFF
-        bytes_data += bytes([nL, nH])
-
-        for x in range(width):
-            for k in range(3):  # 3 bytes = 24 dots
-                byte = 0
-                for b in range(8):
-                    y_offset = y + k * 8 + b
-                    if y_offset >= height:
-                        continue
-                    pixel = img.getpixel((x, y_offset))
-                    if pixel == 0:
-                        byte |= (1 << (7 - b))
-                bytes_data.append(byte)
-
-        bytes_data += b'\x0A'  # xuống dòng
-
-    bytes_data += b'\x0A\x0A\x1D\x56\x00'  # feed + cut
-    return bytes(bytes_data)
-
-
-def image_to_raster_escpos(img: Image.Image) -> bytes:
-    img = img.convert('1')  # chuyển ảnh về 1-bit B/W
+def image_to_raw_raster_bytes(img: Image.Image) -> bytes:
+    """
+    Chuyển đổi ảnh PIL 1-bit thành dữ liệu raster thô.
+    Mỗi byte đại diện cho 8 pixel.
+    """
+    img = img.convert('1')  # Đảm bảo ảnh là 1-bit
     width, height = img.size
     width_bytes = (width + 7) // 8
-    data = bytearray()
 
-    # Header: GS v 0
-    data += b'\x1D\x76\x30\x00'  # GS v 0 m=0
-    data += bytes([width_bytes % 256, width_bytes // 256])
-    data += bytes([height % 256, height // 256])
+    # Tạo một mảng byte để chứa dữ liệu raster
+    raster_data = bytearray()
 
     for y in range(height):
         for x_byte in range(width_bytes):
@@ -99,15 +32,75 @@ def image_to_raster_escpos(img: Image.Image) -> bytes:
             for bit in range(8):
                 x = x_byte * 8 + bit
                 if x < width:
+                    # Lấy pixel, 0 là đen, 255 là trắng
                     pixel = img.getpixel((x, y))
-                    if pixel == 0:
+                    if pixel == 0:  # Pixel màu đen
                         byte |= (1 << (7 - bit))
-            data.append(byte)
+            raster_data.append(byte)
 
-    # Thêm line feed và cut
-    data += b'\x0A\x0A\x1D\x56\x00'
-    return bytes(data)
+    return bytes(raster_data)
+
+
+@app.route('/invoice', methods=['POST'])
+def render_invoice():
+    try:
+        data = request.json
+        lines = data.get('lines', ['Hóa đơn mẫu'])
+        font_size = data.get('font_size', 28)
+        qr_data = data.get('qr_data', None)
+
+        # Load font
+        try:
+            font = ImageFont.truetype(FONT_PATH, font_size)
+        except IOError:
+            return Response("Lỗi: Không tìm thấy file font.", status=500)
+
+        # Chiều rộng cố định cho giấy in 58mm
+        width = 384
+
+        # Ước tính chiều cao ban đầu để vẽ
+        # Chiều cao thực tế sẽ được crop lại ở cuối
+        estimated_height = 100 + len(lines) * (font_size + 10) + (160 if qr_data else 0)
+        img = Image.new("1", (width, estimated_height), color=1)  # Nền trắng
+        draw = ImageDraw.Draw(img)
+
+        y = 10
+        for line in lines:
+            # Sử dụng textbbox để tính toán kích thước chính xác
+            bbox = draw.textbbox((0, 0), line, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+
+            # Căn giữa dòng chữ
+            draw.text(((width - text_width) / 2, y), line, font=font, fill=0)  # Mực đen
+            y += text_height + 5
+
+        if qr_data:
+            y += 10  # Thêm khoảng trống trước QR code
+            qr_img = qrcode.make(qr_data).resize((120, 120)).convert("1")
+            img.paste(qr_img, ((width - 120) // 2, y))
+            y += 120  # Chiều cao của QR code
+
+        # Cắt ảnh về đúng kích thước nội dung
+        final_height = y + 10  # Thêm padding ở dưới
+        final_img = img.crop((0, 0, width, final_height))
+
+        # Chuyển ảnh thành dữ liệu raster thô
+        raw_image_data = image_to_raw_raster_bytes(final_img)
+
+        # Tạo response và thêm header
+        response = Response(raw_image_data, mimetype='application/octet-stream')
+        response.headers['X-Image-Width'] = str(final_img.width)
+        response.headers['X-Image-Height'] = str(final_img.height)
+
+        return response
+
+    except Exception as e:
+        # Bắt lỗi chung và trả về thông báo lỗi
+        return Response(f"Đã xảy ra lỗi trên server: {e}", status=500)
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    # Chạy app, debug=True để tự động reload khi có thay đổi code
+    app.run(host='0.0.0.0', port=5000, debug=True)
+
