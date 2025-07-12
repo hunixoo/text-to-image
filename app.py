@@ -10,6 +10,7 @@ CORS(app, expose_headers=['X-Image-Width', 'X-Image-Height'])
 
 FONT_PATH = os.path.join(os.path.dirname(__file__), "fonts", "Roboto-Regular.ttf")
 
+
 def image_to_raw_raster_bytes(img: Image.Image) -> bytes:
     img = img.convert('1')
     width, height = img.size
@@ -61,7 +62,7 @@ def render_invoice():
 
         y = 10
         for line in lines:
-            line = str(line)  # Đảm bảo là chuỗi
+            line = str(line)
             bbox = draw.textbbox((0, 0), line, font=font)
             text_width = bbox[2] - bbox[0]
             text_height = bbox[3] - bbox[1]
@@ -70,7 +71,7 @@ def render_invoice():
 
         if qr_data:
             y += 10
-            qr_img = qrcode.make(str(qr_data)).resize((120, 120)).convert("1")
+            qr_img = qrcode.make(str(qr_data)).resize((96, 96)).convert("1")
             img.paste(qr_img, ((width - 120) // 2, y))
             y += 120
 
