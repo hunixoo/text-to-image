@@ -56,7 +56,7 @@ def render_invoice():
             return jsonify({"error": "Không tìm thấy font Roboto-Regular.ttf"}), 500
 
         width = 384
-        estimated_height = 100 + len(lines) * (font_size + 10) + (160 if qr_data else 0)
+        estimated_height = 100 + len(lines) * (font_size + 10) + (200 if qr_data else 0)  # Tăng khoảng trống cho QR
         img = Image.new("1", (width, estimated_height), color=1)
         draw = ImageDraw.Draw(img)
 
@@ -70,12 +70,16 @@ def render_invoice():
             y += text_height + 5
 
         if qr_data:
-            y += 10
-            qr_img = qrcode.make(str(qr_data)).resize((96, 96)).convert("1")
-            img.paste(qr_img, ((width - 120) // 2, y))
-            y += 120
+            y += 20  # Tăng khoảng cách trước QR
+            # Tạo QR code nhỏ hơn để đảm bảo không bị cắt
+            qr_size = 80  # Giảm từ 96 xuống 80
+            qr_img = qrcode.make(str(qr_data)).resize((qr_size, qr_size)).convert("1")
+            # Căn giữa chính xác
+            qr_x = (width - qr_size) // 2
+            img.paste(qr_img, (qr_x, y))
+            y += qr_size + 20  # Tăng khoảng cách sau QR
 
-        final_height = y + 10
+        final_height = y + 20  # Tăng margin cuối
         final_img = img.crop((0, 0, width, final_height))
         raw_image_data = image_to_raw_raster_bytes(final_img)
 
