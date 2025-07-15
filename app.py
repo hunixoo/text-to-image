@@ -8,7 +8,9 @@ import traceback
 app = Flask(__name__)
 CORS(app, expose_headers=['X-Image-Width', 'X-Image-Height'])
 
-FONT_PATH = os.path.join(os.path.dirname(__file__), "fonts", "Roboto-Regular.ttf")
+# Font đường dẫn
+FONT_PATH_REGULAR = os.path.join(os.path.dirname(__file__), "fonts", "Roboto-Regular.ttf")
+FONT_PATH_BOLD = os.path.join(os.path.dirname(__file__), "fonts", "Roboto-Bold.ttf")
 
 
 def image_to_raw_raster_bytes(img: Image.Image) -> bytes:
@@ -38,7 +40,6 @@ def render_invoice():
 
         data = request.get_json(force=True)
 
-        # Kiểm tra đầu vào
         if not isinstance(data, dict):
             return jsonify({"error": "Dữ liệu không hợp lệ: không phải dict"}), 400
 
@@ -46,39 +47,56 @@ def render_invoice():
         if not lines or not isinstance(lines, list):
             return jsonify({"error": "Thiếu 'lines' hoặc không phải danh sách"}), 400
 
-        font_size = data.get('font_size', 28)
+        base_font_size = data.get('font_size', 28)
         qr_data = data.get('qr_data', None)
 
-        # Load font
+        # Load font mặc định
         try:
-            font = ImageFont.truetype(FONT_PATH, font_size)
+            font_regular = ImageFont.truetype(FONT_PATH_REGULAR, base_font_size)
+            font_bold = ImageFont.truetype(FONT_PATH_BOLD, base_font_size)
         except IOError:
-            return jsonify({"error": "Không tìm thấy font Roboto-Regular.ttf"}), 500
+            return jsonify({"error": "Không tìm thấy font Roboto"}), 500
 
         width = 384
-        estimated_height = 100 + len(lines) * (font_size + 10) + (200 if qr_data else 0)  # Tăng khoảng trống cho QR
+        estimated_height = 100 + len(lines) * (base_font_size + 10) + (200 if qr_data else 0)
         img = Image.new("1", (width, estimated_height), color=1)
         draw = ImageDraw.Draw(img)
 
         y = 10
-        for line in lines:
-            line = str(line)
-            bbox = draw.textbbox((0, 0), line, font=font)
+        for item in lines:
+            # Cho phép dòng là string hoặc object
+            if isinstance(item, str):
+                item = { "text": item }
+
+            text = str(item.get("text", ""))
+            size = item.get("size", base_font_size)
+            bold = item.get("bold", False)
+            align = item.get("align", "center")
+
+            font = ImageFont.truetype(FONT_PATH_BOLD if bold else FONT_PATH_REGULAR, size)
+            bbox = draw.textbbox((0, 0), text, font=font)
             text_width = bbox[2] - bbox[0]
             text_height = bbox[3] - bbox[1]
-            draw.text(((width - text_width) / 2, y), line, font=font, fill=0)
+
+            if align == "center":
+                x = (width - text_width) / 2
+            elif align == "right":
+                x = width - text_width - 10
+            else:  # left
+                x = 10
+
+            draw.text((x, y), text, font=font, fill=0)
             y += text_height + 5
 
         if qr_data:
-            y += 20  # Tăng khoảng cách trước QR
+            y += 20
             qr_size = 120
             qr_img = qrcode.make(str(qr_data)).resize((qr_size, qr_size)).convert("1")
-            # Căn giữa chính xác
             qr_x = (width - qr_size) // 2
             img.paste(qr_img, (qr_x, y))
-            y += qr_size + 20  # Tăng khoảng cách sau QR
+            y += qr_size + 20
 
-        final_height = y + 20  # Tăng margin cuối
+        final_height = y + 20
         final_img = img.crop((0, 0, width, final_height))
         raw_image_data = image_to_raw_raster_bytes(final_img)
 
