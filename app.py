@@ -64,29 +64,54 @@ def render_invoice():
 
         y = 10
         for item in lines:
-            # Cho phép dòng là string hoặc object
             if isinstance(item, str):
-                item = { "text": item }
+                item = {"text": item}
 
-            text = str(item.get("text", ""))
             size = item.get("size", base_font_size)
             bold = item.get("bold", False)
-            align = item.get("align", "center")
-
             font = ImageFont.truetype(FONT_PATH_BOLD if bold else FONT_PATH_REGULAR, size)
-            bbox = draw.textbbox((0, 0), text, font=font)
-            text_width = bbox[2] - bbox[0]
-            text_height = bbox[3] - bbox[1]
 
-            if align == "center":
-                x = (width - text_width) / 2
-            elif align == "right":
-                x = width - text_width - 10
-            else:  # left
-                x = 10
+            if 'columns' in item:
+                x = 0
+                max_height = 0
+                for col in item['columns']:
+                    col_text = str(col.get("text", ""))
+                    col_align = col.get("align", "left")
+                    col_width = col.get("width", 100)
 
-            draw.text((x, y), text, font=font, fill=0)
-            y += text_height + 5
+                    bbox = draw.textbbox((0, 0), col_text, font=font)
+                    col_text_width = bbox[2] - bbox[0]
+                    col_text_height = bbox[3] - bbox[1]
+
+                    if col_align == "center":
+                        text_x = x + (col_width - col_text_width) / 2
+                    elif col_align == "right":
+                        text_x = x + col_width - col_text_width
+                    else:  # left
+                        text_x = x
+
+                    draw.text((text_x, y), col_text, font=font, fill=0)
+                    x += col_width
+                    max_height = max(max_height, col_text_height)
+
+                y += max_height + 5
+
+            else:
+                text = str(item.get("text", ""))
+                align = item.get("align", "center")
+                bbox = draw.textbbox((0, 0), text, font=font)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+
+                if align == "center":
+                    x = (width - text_width) / 2
+                elif align == "right":
+                    x = width - text_width - 10
+                else:
+                    x = 10
+
+                draw.text((x, y), text, font=font, fill=0)
+                y += text_height + 5
 
         if qr_data:
             y += 20
