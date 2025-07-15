@@ -71,8 +71,7 @@ def render_invoice():
 
         if qr_data:
             y += 20  # Tăng khoảng cách trước QR
-            # Tạo QR code nhỏ hơn để đảm bảo không bị cắt
-            qr_size = 80  # Giảm từ 96 xuống 80
+            qr_size = 120
             qr_img = qrcode.make(str(qr_data)).resize((qr_size, qr_size)).convert("1")
             # Căn giữa chính xác
             qr_x = (width - qr_size) // 2
