@@ -114,7 +114,7 @@ def render_invoice():
 
         if qr_data:
             y += 20
-            qr_size = 180
+            qr_size = 160
             qr_img = qrcode.make(str(qr_data)).resize((qr_size, qr_size)).convert("1")
             qr_x = (width - qr_size) // 2
             img.paste(qr_img, (qr_x, y))
