@@ -32,35 +32,6 @@ def image_to_raw_raster_bytes(img: Image.Image) -> bytes:
     return bytes(raster_data)
 
 
-def calculate_estimated_height(lines, base_font_size, qr_data):
-    """Tính toán chiều cao ước tính chính xác hơn"""
-    height = 100  # Margin đầu và cuối
-
-    for item in lines:
-        if isinstance(item, str):
-            item = {"text": item}
-
-        size = item.get("size", base_font_size)
-        text = str(item.get("text", ""))
-
-        # Tính chiều cao cho từng dòng
-        if 'columns' in item:
-            # Với columns, chiều cao = size + padding
-            height += size + 10
-        else:
-            # Với text thường, tính theo số dòng nếu text dài
-            if len(text) > 50:  # Text dài có thể wrap
-                height += (size + 5) * 2  # Ước tính 2 dòng
-            else:
-                height += size + 8
-
-    # Thêm chiều cao cho QR code
-    if qr_data:
-        height += 220  # QR code + padding
-
-    return height
-
-
 @app.route('/invoice', methods=['POST'])
 def render_invoice():
     try:
@@ -79,7 +50,6 @@ def render_invoice():
         base_font_size = data.get('font_size', 28)
         qr_data = data.get('qr_data', None)
 
-        # Load font mặc định
         try:
             font_regular = ImageFont.truetype(FONT_PATH_REGULAR, base_font_size)
             font_bold = ImageFont.truetype(FONT_PATH_BOLD, base_font_size)
@@ -87,10 +57,7 @@ def render_invoice():
             return jsonify({"error": "Không tìm thấy font Roboto"}), 500
 
         width = 384
-        # Sử dụng hàm tính toán chính xác hơn và thêm buffer cho an toàn
-        estimated_height = calculate_estimated_height(lines, base_font_size, qr_data)
-        estimated_height += 200  # Thêm buffer cho an toàn, đặc biệt với 3 dòng mới
-
+        estimated_height = 100 + len(lines) * (base_font_size + 10) + (220 if qr_data else 0)
         img = Image.new("1", (width, estimated_height), color=1)
         draw = ImageDraw.Draw(img)
 
@@ -126,7 +93,7 @@ def render_invoice():
                     x += col_width
                     max_height = max(max_height, col_text_height)
 
-                y += max_height + 8  # Tăng spacing một chút
+                y += max_height + 5
 
             else:
                 text = str(item.get("text", ""))
@@ -143,7 +110,7 @@ def render_invoice():
                     x = 10
 
                 draw.text((x, y), text, font=font, fill=0)
-                y += text_height + 8  # Tăng spacing một chút
+                y += text_height + 5
 
         if qr_data:
             y += 20
@@ -154,17 +121,7 @@ def render_invoice():
             y += qr_size + 20
 
         final_height = y + 20
-
-        # Kiểm tra và điều chỉnh nếu chiều cao thực tế vượt quá ước tính
-        if final_height > estimated_height:
-            print(f"Warning: Final height ({final_height}) exceeds estimated height ({estimated_height})")
-            # Tạo lại image với chiều cao phù hợp
-            new_img = Image.new("1", (width, final_height), color=1)
-            new_img.paste(img.crop((0, 0, width, min(final_height, estimated_height))), (0, 0))
-            final_img = new_img
-        else:
-            final_img = img.crop((0, 0, width, final_height))
-
+        final_img = img.crop((0, 0, width, final_height))
         raw_image_data = image_to_raw_raster_bytes(final_img)
 
         response = Response(raw_image_data, mimetype='application/octet-stream')
@@ -179,4 +136,3 @@ def render_invoice():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
-    
