@@ -57,7 +57,8 @@ def render_invoice():
             return jsonify({"error": "Không tìm thấy font Roboto"}), 500
 
         width = 384
-        estimated_height = 500 + len(lines) * (base_font_size + 10) + (240 if qr_data else 0)
+        # estimated_height = 100 + len(lines) * (base_font_size + 10) + (240 if qr_data else 0)
+        estimated_height = 2400
         img = Image.new("1", (width, estimated_height), color=1)
         draw = ImageDraw.Draw(img)
 
