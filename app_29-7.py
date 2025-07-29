@@ -13,32 +13,6 @@ FONT_PATH_REGULAR = os.path.join(os.path.dirname(__file__), "fonts", "Roboto-Reg
 FONT_PATH_BOLD = os.path.join(os.path.dirname(__file__), "fonts", "Roboto-Bold.ttf")
 
 
-
-def calculate_accurate_height(lines, base_font_size, qr_data):
-    height = 20  # margin đầu và cuối
-
-    for item in lines:
-        if isinstance(item, str):
-            item = {"text": item}
-
-        size = item.get("size", base_font_size)
-
-        if 'columns' in item:
-            # Columns thường cao hơn text thường
-            height += size + 10
-        else:
-            text = str(item.get("text", ""))
-            if text.strip():  # Nếu có text
-                height += size + 8
-            else:  # Dòng trống
-                height += size // 2
-
-    if qr_data:
-        height += 240  # QR code + margin
-
-    return int(height * 1.2)  # Thêm 20% buffer
-
-
 def image_to_raw_raster_bytes(img: Image.Image) -> bytes:
     img = img.convert('1')
     width, height = img.size
@@ -83,7 +57,7 @@ def render_invoice():
             return jsonify({"error": "Không tìm thấy font Roboto"}), 500
 
         width = 384
-        estimated_height = calculate_accurate_height(lines, base_font_size, qr_data)
+        estimated_height = 100 + len(lines) * (base_font_size + 10) + (240 if qr_data else 0)
         img = Image.new("1", (width, estimated_height), color=1)
         draw = ImageDraw.Draw(img)
 
