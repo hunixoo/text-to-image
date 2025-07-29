@@ -13,7 +13,6 @@ FONT_PATH_REGULAR = os.path.join(os.path.dirname(__file__), "fonts", "Roboto-Reg
 FONT_PATH_BOLD = os.path.join(os.path.dirname(__file__), "fonts", "Roboto-Bold.ttf")
 
 
-
 def calculate_accurate_height(lines, base_font_size, qr_data):
     height = 20  # margin đầu và cuối
 
@@ -149,6 +148,11 @@ def render_invoice():
         final_height = y + 20
         final_img = img.crop((0, 0, width, final_height))
         raw_image_data = image_to_raw_raster_bytes(final_img)
+
+        print(f"Estimated height: {estimated_height}")
+        print(f"Final height: {final_height}")
+        print(f"Number of lines: {len(lines)}")
+        print(f"Y position after rendering: {y}")
 
         response = Response(raw_image_data, mimetype='application/octet-stream')
         response.headers['X-Image-Width'] = str(final_img.width)
